@@ -30,6 +30,9 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 
+#include <esp_http_client.h>
+#include <esp_ota_ops.h>
+
 #include "ds18b20.h"
 
 #include "driver/gpio.h"
@@ -107,7 +110,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 
 void init_uart(void) {
     const uart_config_t uart_config = {
-        .baud_rate = 115200,
+        .baud_rate = 111500,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -123,7 +126,9 @@ void init_uart(void) {
 int sendData(const char* logName, const char* data)
 {
     const int len = strlen(data);
+
     const int txBytes = uart_write_bytes(UART_NUM_1, data, len);
+    vTaskDelay(500);
     ESP_LOGI(logName, "Wrote %d bytes", txBytes);
     return txBytes;
 }
@@ -132,10 +137,8 @@ static void tx_task(void *arg)
 {
     static const char *TX_TASK_TAG = "TX_TASK";
     esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
-    while (1) {
-        sendData(TX_TASK_TAG, "Hello world");
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-    }
+    vTaskDelay(500);
+    sendData(TX_TASK_TAG, "Hello world");
 }
 
 void wifi_init_sta(void)
@@ -368,7 +371,7 @@ void app_main(void)
     init_uart();
     
     while(1){
-        xTaskCreate(tx_task, "uart_tx_task", 1024*2, NULL, configMAX_PRIORITIES-1, NULL);
+        //xTaskCreate(tx_task, "uart_tx_task", 1024*2, NULL, configMAX_PRIORITIES-1, NULL);
         cTemp = ds18b20_get_temp();
         raw_ppm = adc1_get_raw(ADC1_CHANNEL_6);
         ppm = convert_to_ppm(raw_ppm,cTemp);
@@ -377,17 +380,20 @@ void app_main(void)
         printf("Temperatura: %f\n",cTemp);
         printf("PPM  = %f \n", ppm);
         printf("Electroconductividad  = %f \n", ec);
-        vTaskDelay(500);
         cJSON *data = cJSON_CreateObject();
         cJSON_AddNumberToObject(data, "temperature", cTemp);
         mqtt_send_data(client, "v1/devices/me/telemetry", data);
-
+        sendData(TAG, "040105");
         cJSON *data2 = cJSON_CreateObject();
         cJSON_AddNumberToObject(data2, "ppm", ppm);
         mqtt_send_data(client, "v1/devices/me/telemetry", data2);
-
+        sendData(TAG, "040206");
         cJSON *data3 = cJSON_CreateObject();
         cJSON_AddNumberToObject(data3, "k", ec);
         mqtt_send_data(client, "v1/devices/me/telemetry", data3);
+        
+        sendData(TAG, "040307");
+
+        vTaskDelay(2000);
     }
 }
